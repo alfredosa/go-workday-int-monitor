@@ -1,18 +1,19 @@
 package handlers
 
 import (
-	"fmt"
+	"database/sql"
 	"net/http"
 	"text/template"
 	"time"
 )
 
-type WorkdayCredentials struct {
+type Config struct {
 	ISU      string
 	Password string
+	DB       *sql.DB
 }
 
-func (wdcreds *WorkdayCredentials) LoginPage(w http.ResponseWriter, r *http.Request) {
+func (config *Config) LoginPage(w http.ResponseWriter, r *http.Request) {
 	var errorMessage string
 
 	if r.Method == http.MethodPost {
@@ -33,7 +34,7 @@ func (wdcreds *WorkdayCredentials) LoginPage(w http.ResponseWriter, r *http.Requ
 				Expires: time.Now().Add(1 * time.Hour),
 			})
 
-			http.Redirect(w, r, "/welcome", http.StatusFound)
+			http.Redirect(w, r, "/loading", http.StatusFound)
 			return
 		}
 	}
@@ -49,22 +50,46 @@ func (wdcreds *WorkdayCredentials) LoginPage(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (wdcreds *WorkdayCredentials) WelcomePage(w http.ResponseWriter, r *http.Request) {
-	session, err := r.Cookie("session")
+func (config *Config) DashboardPage(w http.ResponseWriter, r *http.Request) {
+	tmpl, err := template.ParseFiles("templates/dashboard.html")
 	if err != nil {
-		http.Redirect(w, r, "/login", http.StatusFound)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	checkCookies(w, r, "/login")
+	tmpl.Execute(w, map[string]string{
+		"ErrorMessage": "",
+	})
+}
 
-	if session.Value != "valid" {
-		http.Redirect(w, r, "/login", http.StatusFound)
+func (config *Config) LoadingPage(w http.ResponseWriter, r *http.Request) {
+	checkCookies(w, r, "/login")
+
+	tmpl, err := template.ParseFiles("templates/loading_page.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "Welcome, you have successfully logged in!")
+	tmpl.Execute(w, map[string]string{
+		"ErrorMessage": "",
+	})
 }
 
-func (wdcreds *WorkdayCredentials) HealthHandler(w http.ResponseWriter, r *http.Request) {
+func (config *Config) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
+}
+
+func checkCookies(w http.ResponseWriter, r *http.Request, redirect string) {
+	cookie, err := r.Cookie("session")
+	if err != nil {
+		http.Redirect(w, r, redirect, http.StatusFound)
+		return
+	}
+	if cookie.Value != "valid" {
+		http.Redirect(w, r, redirect, http.StatusFound)
+		return
+	}
 }
