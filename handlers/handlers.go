@@ -88,7 +88,7 @@ func checkCookies(w http.ResponseWriter, r *http.Request, redirect string) {
 		http.Redirect(w, r, redirect, http.StatusFound)
 		return
 	}
-	if cookie.Value != "valid" {
+	if cookie.Value != "valid" || cookie.Expires.Before(time.Now()) {
 		http.Redirect(w, r, redirect, http.StatusFound)
 		return
 	}
